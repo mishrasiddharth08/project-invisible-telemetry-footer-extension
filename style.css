@@ -1,0 +1,252 @@
+/* PROJECT INVISIBLE - Telemetry strip.
+   Scoped entirely to .pi-telemetry-strip; nothing here can reach Forge markup. */
+
+.pi-telemetry-strip {
+    --pi-loaded: 1;
+    --pi-ok: #34d399;
+    --pi-warn: #facc4d;
+    --pi-crit: #f87171;
+    --pi-ink: var(--body-text-color, #e5e7eb);
+    --pi-mute: var(--body-text-color-subdued, #9ca3af);
+    --pi-line: color-mix(in srgb, var(--pi-ink) 8%, transparent);
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: space-evenly;
+    gap: 3px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 3px;
+    border: 1px solid var(--pi-line);
+    border-radius: 14px;
+    background: linear-gradient(125deg, color-mix(in srgb, #7dd3fc 4%, transparent), color-mix(in srgb, #a78bfa 3%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--pi-ink) 6%, transparent);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    cursor: copy;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+.pi-telemetry-strip:hover {
+    border-color: color-mix(in srgb, var(--pi-ink) 20%, transparent);
+}
+
+.pi-telemetry-strip.pi-copied {
+    border-color: color-mix(in srgb, var(--pi-ok) 60%, transparent);
+    background: color-mix(in srgb, var(--pi-ok) 8%, transparent);
+}
+
+/* ---------------------------------------------------------------- cells */
+
+.pi-telemetry-strip .pi-cell {
+    flex: 1 1 220px;
+    min-width: 0;
+    padding: 5px 11px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--pi-ink) 3%, transparent);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--pi-ink) 4%, transparent), color-mix(in srgb, var(--pi-ink) 1%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--pi-ink) 5%, transparent);
+}
+
+.pi-telemetry-strip .pi-div {
+    display: none;
+    align-self: center;
+    width: 1px;
+    height: 18px;
+    background: linear-gradient(
+        180deg,
+        transparent,
+        color-mix(in srgb, var(--pi-ink) 16%, transparent),
+        transparent
+    );
+}
+
+.pi-telemetry-strip .pi-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.pi-telemetry-strip .pi-key {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+.pi-telemetry-strip .pi-model {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--pi-mute);
+    opacity: 0.85;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pi-telemetry-strip .pi-body {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    margin-top: 3px;
+    line-height: 1.3;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    white-space: nowrap;
+}
+
+.pi-telemetry-strip .pi-val {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.pi-telemetry-strip .pi-unit {
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.65;
+}
+
+.pi-telemetry-strip .pi-sub {
+    margin-left: 6px;
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--pi-mute);
+    opacity: 0.9;
+}
+
+.pi-telemetry-strip .pi-thermal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 22px;
+    margin-top: 2px;
+    white-space: nowrap;
+}
+
+.pi-telemetry-strip .pi-thermal-label {
+    color: var(--pi-mute);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}
+
+.pi-telemetry-strip .pi-temp {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    padding: 1px 7px;
+    line-height: 1.4;
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 999px;
+    background: linear-gradient(160deg, color-mix(in srgb, currentColor 12%, transparent), color-mix(in srgb, currentColor 4%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, currentColor 18%, transparent);
+    color: var(--pi-ink);
+    font-size: 12px;
+    font-weight: 650;
+    opacity: 1;
+}
+
+/* ---------------------------------------------------------------- gauge */
+
+.pi-telemetry-strip .pi-gauge {
+    height: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--pi-ink) 9%, transparent);
+}
+
+.pi-telemetry-strip .pi-gauge > i {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: 2px;
+}
+
+/* ------------------------------------------------------------- tiers */
+
+.pi-telemetry-strip .pi-ok { color: var(--pi-ok); }
+.pi-telemetry-strip .pi-warn { color: var(--pi-warn); }
+.pi-telemetry-strip .pi-crit { color: var(--pi-crit); }
+.pi-telemetry-strip .pi-unavailable { color: var(--pi-mute); opacity: 1; }
+
+.pi-telemetry-strip .pi-gauge > i.pi-ok { background: var(--pi-ok); }
+.pi-telemetry-strip .pi-gauge > i.pi-warn { background: var(--pi-warn); }
+
+.pi-telemetry-strip .pi-gauge > i.pi-crit {
+    background: var(--pi-crit);
+    box-shadow: 0 0 5px color-mix(in srgb, var(--pi-crit) 65%, transparent);
+}
+
+.pi-telemetry-strip .pi-val.pi-crit {
+    text-shadow: 0 0 12px color-mix(in srgb, var(--pi-crit) 40%, transparent);
+}
+
+/* ------------------------------------------------------- extra states */
+
+.pi-telemetry-strip .pi-connection {
+    margin: 3px 8px;
+    color: var(--pi-warn);
+    font-size: 10px;
+}
+
+.pi-telemetry-strip .pi-connection[hidden] { display: none; }
+.pi-telemetry-strip.pi-stale .pi-cell { opacity: 0.45; }
+.pi-telemetry-strip.pi-stale .pi-live { display: none; }
+
+.pi-telemetry-strip .pi-cell.pi-click {
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background-color 0.2s ease;
+}
+
+.pi-telemetry-strip .pi-cell.pi-click:hover {
+    background: color-mix(in srgb, var(--pi-ink) 6%, transparent);
+}
+
+.pi-telemetry-strip .pi-cell.pi-dim { opacity: 0.42; }
+
+.pi-telemetry-strip .pi-live {
+    align-self: center;
+    margin-left: 10px;
+    padding: 2px 6px 1px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pi-ok) 14%, transparent);
+    color: var(--pi-ok);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pi-telemetry-strip .pi-live {
+        animation: none;
+        opacity: 0.85;
+    }
+}
+
+/* Keep hardware names visible on small screens; cards wrap naturally. */
+@media (max-width: 900px) {
+    .pi-telemetry-strip {
+        gap: 3px;
+        padding: 3px;
+    }
+
+    .pi-telemetry-strip .pi-cell { padding: 5px 10px; flex-basis: 210px; }
+    .pi-telemetry-strip .pi-div { display: none; }
+    .pi-telemetry-strip .pi-model { display: inline; }
+}

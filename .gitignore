@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Per-install state, NOT source. lib/poller.py rewrites this file on first
+# launch; the copy on any given machine carries that machine's GPU/CPU/RAM
+# fingerprint and its remembered GPU choice, so it is never published.
+config.json
+config.json.*
+
+# Scratch / logs
+*.log
+*.tmp
+*.part
