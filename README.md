@@ -16,6 +16,42 @@ Info page. It never appears in the Scripts dropdown and never changes how you ge
 Each cell carries the hardware's real identity, a live percentage, the used/total figure
 and a hairline gauge that fills as it loads.
 
+## The Project Invisible idea
+
+Project Invisible is an independent Forge Neo extension project that makes an additional
+tool feel like a natural part of the existing WebUI. The basic idea is simple: Forge's
+normal interface keeps working exactly as before, and the extension performs its work
+behind that workflow instead of asking users to learn a separate application or page.
+
+This is the author's first public project. It was built by a beginner who is still
+learning. Mistakes may exist, and patience is sincerely appreciated. Clear reports and
+complete error messages will help the project improve.
+
+### The Project Invisible philosophy
+
+"Invisible" means integration with minimum disruption. This extension is designed
+around these principles:
+
+- use Forge Neo's normal interface, tabs and settings;
+- avoid adding a separate generation tab, second window or second venv;
+- avoid modifying or forking Forge core files;
+- never appear in the Scripts dropdown and add zero generator controls;
+- leave unrelated models and extensions unchanged;
+- release its worker and memory when switching away;
+- make downloads, errors, limitations and experimental behavior visible and honest.
+
+The extension is "invisible" in workflow, not in responsibility. It should never hide
+hardware limitations, errors, licensing conditions or quality trade-offs from the user.
+
+### Testing status
+
+The strip has been tested on the author's NVIDIA/Windows system. Other hardware
+combinations, backends and Forge versions are untested or not fully confirmed. The code
+contains fallback paths for AMD, CPU-only and multi-GPU systems, but users should not
+assume those paths are production-ready merely because code exists. Performance and
+sensor availability vary with the GPU, driver, operating system and Forge version. No
+claim is made that every configuration will work.
+
 ---
 
 ## 1. Install
@@ -303,6 +339,29 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
 
 ### 1.0.0
 - Initial release: CPU / RAM / VRAM / SWAP strip above the version footer.
+
+## Troubleshooting
+
+If a problem occurs, please open a GitHub issue and paste the **complete** error from the
+DOS/terminal window — from the first error line through the final traceback line. A single
+final sentence is usually not enough to identify the cause. Please also include your
+Windows and Forge Neo versions, GPU/VRAM/RAM, sensor situation (for example whether
+Libre/Open Hardware Monitor is running) and exact reproduction steps.
+
+**Remove private paths, usernames, tokens and personal images before posting.**
+
+## Contributions
+
+Bug reports, documentation corrections and focused code improvements are welcome.
+Contributors should state exactly what was tested, avoid describing untested paths as
+working, preserve upstream licenses and never commit model weights, generated images,
+dependency folders, logs, access tokens or private information.
+
+## A humble note from the author
+
+This is a first public attempt by a non-programmer learning through experimentation and
+community help. Please forgive mistakes. Constructive feedback, patient explanations and
+complete error reports are welcomed with gratitude.
 
 ## Special Thanks
 
