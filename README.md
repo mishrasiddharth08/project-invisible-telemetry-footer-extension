@@ -304,6 +304,16 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
 ### 1.0.0
 - Initial release: CPU / RAM / VRAM / SWAP strip above the version footer.
 
+## Special Thanks
+
+Special thanks to the communities and projects that made this possible:
+
+- [r/sdforall](https://www.reddit.com/r/sdforall/)
+- [r/SECourses](https://www.reddit.com/r/SECourses/)
+- [r/malcolmrey](https://www.reddit.com/r/malcolmrey/)
+- [Haoming02 / sd-webui-forge-classic (neo)](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)
+- And everyone else in the Stable Diffusion community — thank you.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
