@@ -20,7 +20,7 @@ function harness() {
   const timers = new Map(), requests = [], events = {};
   const nodes = {};
   for (const k of ['cpu','ram','gpu0']) {
-    for (const kind of ['v','s','g','t']) {
+    for (const kind of ['v','s','g','t','w']) {
       nodes['[data-'+kind+'="'+k+'"]'] = {textContent:'', className:'', style:{}};
     }
   }
@@ -88,7 +88,7 @@ test('legacy 1 ms settings have a floor, and hardware labels are explicit',()=>{
   // Each temperature has a separate labelled row, not a crowded identity header.
   for (const k of ['cpu','ram','gpu0']) {
     const label=k==='gpu0'?'GPU':k.toUpperCase();
-    assert.match(html,new RegExp('<div class="pi-thermal"><span class="pi-thermal-label">'+label+' TEMP</span><span class="pi-temp pi-unavailable" data-t="'+k+'">N/A</span></div>'));
+    assert.match(html,new RegExp(label+' TEMP · <span data-w="'+k+'" title="Power draw">N/A W</span></span><span class="pi-temp pi-unavailable" data-t="'+k+'">N/A</span>'));
   }
   const s=sample(); s.cfg.idle_ms=2000; h.api.set(s,h.strip);
   assert.equal(h.api.interval(),2000);
@@ -118,6 +118,18 @@ test('temperatures repaint with readings and unavailable sensors never become ze
   assert.equal(h.nodes['[data-t="gpu0"]'].textContent,'N/A');
   assert.equal(h.nodes['[data-t="ram"]'].className,'pi-temp pi-unavailable');
   assert.equal(h.nodes['[data-t="gpu0"]'].className,'pi-temp pi-unavailable');
+});
+
+test('power repaints independently of load and never fabricates missing sensors',()=>{
+  const h=harness(), s=sample();
+  s.cpu.power_w=72.3; s.ram.power_w=0; s.gpus[0].power_w=420.5;
+  h.api.set(s,h.strip); h.api.paint();
+  assert.equal(h.nodes['[data-w="cpu"]'].textContent,'72.3 W');
+  assert.equal(h.nodes['[data-w="ram"]'].textContent,'0.0 W');
+  assert.equal(h.nodes['[data-w="gpu0"]'].textContent,'420.5 W');
+  s.cpu.power_w=null; s.ram.power_w=-1; s.gpus[0].power_w=NaN;
+  h.api.paint();
+  for (const k of ['cpu','ram','gpu0']) assert.equal(h.nodes['[data-w="'+k+'"]'].textContent,'N/A W');
 });
 
 test('stalled requests time out, retry and ignore a late old reply',async()=>{

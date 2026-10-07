@@ -78,6 +78,30 @@ class TelemetryTests(unittest.TestCase):
         probe.nvml = None
         self.assertIsNone(probe.gpu_temperature(0))
 
+    def test_power_mapping_and_nvml_units(self):
+        rows = [
+            {'SensorType':'Power','Parent':'/intelcpu/0','Name':'CPU Package','Value':75},
+            {'SensorType':'Power','Parent':'/intelcpu/0','Name':'CPU Cores','Value':60},
+            {'SensorType':'Power','Parent':'/intelcpu/0','Name':'CPU DRAM','Value':8},
+            {'SensorType':'Power','Parent':'/nvidiagpu/0','Name':'Memory','Value':40},
+            {'SensorType':'Power','Parent':'/ram/0','Name':'DIMM A','Value':4},
+            {'SensorType':'Power','Parent':'/ram/1','Name':'DIMM B','Value':5},
+            {'SensorType':'Temperature','Parent':'/intelcpu/0','Name':'CPU Package','Value':65},
+        ]
+        self.assertEqual(probe_module.TemperatureReader.select_power(rows),
+                         {'cpu_power_w':75, 'ram_power_w':8})
+        self.assertEqual(probe_module.TemperatureReader.select_power(rows[3:]),
+                         {'cpu_power_w':None, 'ram_power_w':9})
+        self.assertEqual(probe_module.TemperatureReader.select(rows)['cpu'],65)
+        probe = probe_module.Probe.__new__(probe_module.Probe)
+        probe.handles = ['fake']
+        probe.nvml = SimpleNamespace(nvmlDeviceGetPowerUsage=lambda handle: 420500)
+        self.assertEqual(probe.gpu_power(0),420.5)
+        probe.nvml.nvmlDeviceGetPowerUsage = lambda handle: None
+        self.assertIsNone(probe.gpu_power(0))
+        for value in (None, True, -1, float('nan'), float('inf')):
+            self.assertIsNone(probe_module.power_value(value))
+
     def poller(self, values=None):
         probe = FakeProbe()
         # Avoid hardware fingerprinting or config writes entirely.

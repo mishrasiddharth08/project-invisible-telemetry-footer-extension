@@ -1,4 +1,13 @@
-# Telemetry 1.1.3 validation
+# Telemetry 1.1.4 validation
+
+## October 7, 2026 power update
+
+- Seven JavaScript and eight Python tests passed, including watts repainting,
+  absent/invalid counters, NVML milliwatt conversion, and non-overlapping CPU/RAM
+  power selection. No hardware stress test or Forge restart was performed.
+- Power uses the existing temperature row. No stylesheet changes were made.
+- Existing UI infographic is illustrative, not a live hardware screenshot.
+- Real CPU/RAM/GPU power readings still need verification after loading the update.
 
 ## September 12 temperature update
 

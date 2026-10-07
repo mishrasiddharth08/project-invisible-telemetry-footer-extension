@@ -100,6 +100,11 @@
     return value.toFixed(1) + " °C";
   }
 
+  function powerText(value) {
+    return typeof value === "number" && isFinite(value) && value >= 0
+      ? value.toFixed(1) + " W" : "N/A W";
+  }
+
   function ramModel(hw) {
     if (!hw) return "";
     const bits = [];
@@ -138,7 +143,8 @@
       '<span class="pi-sub" data-s="' + key + '">' + esc(detail || "") + "</span>" +
       "</div>" +
       (key !== "swap" ? '<div class="pi-thermal"><span class="pi-thermal-label">' +
-        (key.indexOf("gpu") === 0 ? "GPU" : key.toUpperCase()) + ' TEMP</span>' +
+        (key.indexOf("gpu") === 0 ? "GPU" : key.toUpperCase()) + ' TEMP · ' +
+        '<span data-w="' + key + '" title="Power draw">N/A W</span></span>' +
         '<span class="pi-temp pi-unavailable" data-t="' + key + '">N/A</span></div>' : "") +
       '<div class="pi-gauge"><i data-g="' + key + '"></i></div>' +
       "</div>"
@@ -212,9 +218,9 @@
   function readings(s) {
     const compact = (s.cfg || {}).compact !== false;
     const out = {};
-    if (s.cpu) out.cpu = { pct: num(s.cpu.pct, 0), detail: clockText(s.cpu), temperature: s.cpu.temperature_c };
+    if (s.cpu) out.cpu = { pct: num(s.cpu.pct, 0), detail: clockText(s.cpu), temperature: s.cpu.temperature_c, power: s.cpu.power_w };
     if (s.ram && num(s.ram.total_gb, 0) > 0) {
-      out.ram = { pct: num(s.ram.pct, 0), detail: memDetail(s.ram, compact), temperature: s.ram.temperature_c };
+      out.ram = { pct: num(s.ram.pct, 0), detail: memDetail(s.ram, compact), temperature: s.ram.temperature_c, power: s.ram.power_w };
     }
     if (s.swap && s.swap.present) {
       out.swap = { pct: num(s.swap.pct, 0), detail: memDetail(s.swap, compact) };
@@ -224,6 +230,7 @@
         pct: num(g.pct, 0),
         detail: num(g.total_gb, 0) > 0 ? memDetail(g, compact) : "N/A",
         temperature: g.temperature_c,
+        power: g.power_w,
       };
     });
     return out;
@@ -297,6 +304,14 @@
         }
         const subEl = el.querySelector('[data-s="' + k + '"]');
         if (subEl && subEl.textContent !== detail) subEl.textContent = detail;
+        const powerEl = el.querySelector('[data-w="' + k + '"]');
+        if (powerEl) {
+          const power = powerText(goal[k].power);
+          if (powerEl.textContent !== power) powerEl.textContent = power;
+          powerEl.title = power === "N/A W" ? "Power sensor unavailable"
+            : (k.indexOf("gpu") === 0 ? "GPU device power reported by NVML"
+              : k === "cpu" ? "CPU package power" : "Reported RAM/DRAM power");
+        }
         const tempEl = el.querySelector('[data-t="' + k + '"]');
         if (tempEl) {
           const temperature = temperatureText(goal[k].temperature);
@@ -487,8 +502,10 @@
     }
     bits.push("PI-Telemetry " + new Date(num(s.ts, Date.now() / 1000) * 1000).toISOString());
     bits.push("Temperatures: CPU " + temperatureText(c.temperature_c) + ", RAM " + temperatureText(r.temperature_c));
+    bits.push("Power: CPU " + powerText(c.power_w) + ", RAM " + powerText(r.power_w));
     (s.gpus || []).forEach(function (g) {
       bits.push("GPU" + g.index + " core " + temperatureText(g.temperature_c));
+      bits.push("GPU" + g.index + " power " + powerText(g.power_w));
     });
     return bits.join(" | ");
   }

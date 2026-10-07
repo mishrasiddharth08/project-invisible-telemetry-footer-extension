@@ -336,6 +336,16 @@ def temperature_value(value):
         return None
 
 
+def power_value(value):
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+        return round(value, 1) if math.isfinite(value) and value >= 0 else None
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
 class TemperatureReader:
     """Read an existing LHM/OHM WMI provider, without loading a sensor driver.
 
@@ -355,6 +365,8 @@ class TemperatureReader:
         for row in rows:
             if not isinstance(row, dict):
                 continue
+            if row.get('SensorType', 'Temperature') != 'Temperature':
+                continue
             value = temperature_value(row.get('Value'))
             if value is None:
                 continue
@@ -372,12 +384,40 @@ class TemperatureReader:
         return {'cpu': max(packages or cpu) if cpu else None,
                 'ram': max(ram) if ram else None}
 
+    @staticmethod
+    def select_power(rows):
+        # Prefer package/domain totals. Never add package power to its cores,
+        # or GPU-memory power to system RAM. Missing counters are not estimates.
+        packages, memory_domains, dimms = {}, {}, {}
+        for row in rows:
+            if not isinstance(row, dict) or row.get('SensorType') != 'Power':
+                continue
+            value = power_value(row.get('Value'))
+            if value is None:
+                continue
+            parent = str(row.get('Parent', '')).lower()
+            name = str(row.get('Name', '')).lower()
+            if 'gpu' in parent:
+                continue
+            if parent.startswith(('/intelcpu/', '/amdcpu/')):
+                if 'package' in name or name in ('ppt', 'cpu ppt'):
+                    packages[parent] = max(packages.get(parent, 0), value)
+                elif name in ('memory', 'dram', 'cpu dram', 'cpu memory'):
+                    memory_domains[parent] = max(memory_domains.get(parent, 0), value)
+            elif parent.startswith(('/ram/', '/memory/')) or 'dimm' in name:
+                key = str(row.get('Identifier') or (parent + '/' + name))
+                dimms[key] = value
+        ram = memory_domains or dimms
+        return {'cpu_power_w': round(sum(packages.values()), 1) if packages else None,
+                'ram_power_w': round(sum(ram.values()), 1) if ram else None}
+
     def _query(self):
         command = (
             "$ErrorActionPreference='Stop'; "
             "foreach ($ns in @('root\\LibreHardwareMonitor','root\\OpenHardwareMonitor')) { "
             "try { $rows=@(Get-CimInstance -Namespace $ns -ClassName Sensor "
-            "-Filter \"SensorType = 'Temperature'\" | Select-Object Name,Parent,Value); "
+            "-Filter \"SensorType = 'Temperature' OR SensorType = 'Power'\" "
+            "| Select-Object Name,Parent,Identifier,SensorType,Value); "
             "if ($rows.Count -gt 0) { ConvertTo-Json -InputObject $rows -Compress; exit 0 } "
             "} catch {} }; Write-Output '[]'"
         )
@@ -391,7 +431,7 @@ class TemperatureReader:
         rows = json.loads(result.stdout)
         if isinstance(rows, dict):
             rows = [rows]
-        return self.select(rows) if isinstance(rows, list) else {}
+        return {**self.select(rows), **self.select_power(rows)} if isinstance(rows, list) else {}
 
     def _update(self):
         try:
@@ -454,6 +494,16 @@ class Probe:
         try:
             return temperature_value(self.nvml.nvmlDeviceGetTemperature(
                 self.handles[index], self.nvml.NVML_TEMPERATURE_GPU))
+        except Exception:
+            return None
+
+    def gpu_power(self, index):
+        if self.nvml is None or not (0 <= index < len(self.handles)):
+            return None
+        try:
+            milliwatts = self.nvml.nvmlDeviceGetPowerUsage(self.handles[index])
+            value = power_value(milliwatts)
+            return power_value(float(milliwatts) / 1000.0) if value is not None else None
         except Exception:
             return None
 
@@ -765,6 +815,7 @@ class Probe:
         reader = getattr(self, 'temperature_reader', None)
         temperatures = reader.read() if reader is not None else {}
         ram['temperature_c'] = temperatures.get('ram')
+        ram['power_w'] = temperatures.get('ram_power_w')
         gpus = []
         for index, gpu in enumerate(self.gpu_static):
             used = 0.0
@@ -781,6 +832,7 @@ class Probe:
                     "total_gb": round(total, 2),
                     "pct": pct,
                     "temperature_c": self.gpu_temperature(index),
+                    "power_w": self.gpu_power(index),
                     "cuda_cap": gpu["cuda_cap"],
                 }
             )
@@ -792,6 +844,7 @@ class Probe:
                 "mhz": self.cpu_mhz,
                 "mhz_now": cpu_mhz_now,
                 "temperature_c": temperatures.get('cpu'),
+                "power_w": temperatures.get('cpu_power_w'),
                 "cores_logical": self.cores_logical,
                 "cores_physical": self.cores_physical,
             },

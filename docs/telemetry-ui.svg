@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+<title id="title">Project Invisible telemetry: temperatures and power</title>
+<desc id="desc">Illustrative UI. Four cards retain the existing layout. CPU, RAM and GPU power appears beside the temperature label. Missing sensors show N/A W.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#14232e"/><stop offset="1" stop-color="#141a2b"/></linearGradient><linearGradient id="card" x2="0" y2="1"><stop stop-color="#ffffff" stop-opacity=".055"/><stop offset="1" stop-color="#ffffff" stop-opacity=".015"/></linearGradient></defs>
+<rect width="1200" height="300" rx="24" fill="#0d1420"/>
+<g font-family="Segoe UI,Arial,sans-serif" fill="#e4ebf7">
+<text x="30" y="35" fill="#79ddbc" font-size="11" letter-spacing="3">PROJECT INVISIBLE</text>
+<text x="30" y="69" font-size="25" font-weight="600">Your hardware, at a glance.</text>
+<text x="1170" y="35" text-anchor="end" fill="#9ca9bc" font-size="11">1.1.4 / ILLUSTRATIVE READINGS</text>
+<rect x="24" y="90" width="1152" height="110" rx="14" fill="url(#bg)" stroke="#ffffff" stroke-opacity=".08"/>
+<g fill="url(#card)" stroke="#ffffff" stroke-opacity=".04"><rect x="28" y="94" width="280" height="102" rx="10"/><rect x="312" y="94" width="280" height="102" rx="10"/><rect x="596" y="94" width="280" height="102" rx="10"/><rect x="880" y="94" width="292" height="102" rx="10"/></g>
+<g font-size="11" fill="#a8b6ca"><text x="42" y="114">CPU   i7-13700K · 16C/24T</text><text x="326" y="114">RAM   G.Skill · DDR5-5600 · 2×48GB</text><text x="610" y="114">VRAM   RTX 5090</text><text x="894" y="114">SWAP</text></g>
+<g fill="#34d399" font-size="22" font-weight="600"><text x="42" y="144">38%</text><text x="326" y="144">34%</text><text x="610" y="144">57%</text><text x="894" y="144">2%</text></g>
+<g font-size="12" fill="#a8b6ca"><text x="98" y="142">5.08 GHz</text><text x="382" y="142">32.1 / 95.7 GB</text><text x="666" y="142">18.2 / 31.8 GB</text><text x="934" y="142">0.7 / 36.0 GB</text></g>
+<g font-size="10" fill="#a8b6ca"><text x="42" y="171">CPU TEMP · 72.3 W</text><text x="326" y="171">RAM TEMP · 8.0 W</text><text x="610" y="171">GPU TEMP · 420.5 W</text></g>
+<g font-size="12" font-weight="600"><text x="256" y="171" fill="#34d399">64°C</text><text x="540" y="171" fill="#facc4d">58°C</text><text x="824" y="171" fill="#f87171">92°C</text></g>
+<g stroke="#ffffff" stroke-opacity=".09" stroke-width="2"><path d="M42 184H294M326 184H578M610 184H862M894 184H1158"/></g>
+<g stroke="#34d399" stroke-width="2"><path d="M42 184H138M326 184H412M610 184H754M894 184H899"/></g>
+<g font-size="12"><text x="30" y="231" fill="#34d399">Green: below alert</text><text x="260" y="231" fill="#facc4d">Yellow: alert</text><text x="465" y="231" fill="#f87171">Red: high temperature</text></g>
+<text x="30" y="271" fill="#9ca9bc" font-size="12">Same layout. Live watts. Adjustable temperature alerts. Unsupported sensors display N/A.</text>
+</g></svg>

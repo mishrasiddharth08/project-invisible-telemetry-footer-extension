@@ -1,6 +1,10 @@
 # PROJECT INVISIBLE — Telemetry Strip
 
-Version **1.1.3** · MIT (this extension's code only)
+Version **1.1.4** · MIT (this extension's code only)
+
+![Telemetry UI infographic: CPU, RAM, GPU temperatures and power](docs/telemetry-ui.svg)
+
+Illustrative readings. The existing strip design and position are preserved.
 
 A Forge Neo **invisible HUD**: one thin live instrument strip — CPU / RAM / VRAM / SWAP —
 that names your actual hardware and colours itself green, amber or red as load climbs.
@@ -120,6 +124,23 @@ are CPU 80/95 °C, GPU 80/90 °C and RAM 55/70 °C, adjustable in Settings.
 These are display alerts, not manufacturer-certified safety limits. Missing readings
 remain neutral gray. Hover a temperature for its source and configured thresholds.
 CPU/RAM temperature support in this revision is Windows-specific.
+
+### Live power draw
+
+Watts appear beside the temperature label, using the existing row and styling.
+
+| Component | Source | If unavailable |
+|---|---|---|
+| GPU | NVIDIA NVML device power | N/A W |
+| CPU | Libre/Open Hardware Monitor CPU package/PPT sensor | N/A W |
+| RAM | Reported DRAM domain or module power sensors | N/A W |
+
+GPU power updates with shared snapshots; the driver controls its measurement window.
+CPU/RAM sensors share the existing background query (about two seconds) and expire
+after five seconds. Start a compatible monitor with accessible WMI sensors to enable
+them. Not every PC exposes these sensors. No wattage is estimated from usage or TDP;
+zero watts is displayed only when the sensor reports zero. Package/core counters and
+DRAM/module totals are not added together. Copied snapshots include power readings.
 
 The jelly-style strip uses rounded cards, static translucent highlights, larger
 tabular numbers and compact temperature pills. No continuous pulse or backdrop blur
@@ -269,7 +290,7 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
 ## 9. Update / uninstall
 
 - **Update:** replace the folder contents, restart Forge fully when other work is finished.
-  Pinned at 1.1.3; never
+  Pinned at 1.1.4; never
   auto-updates, never phones home.
 - **Uninstall:** delete the folder, restart Forge. Stock UI restored. Your settings live
   in Forge's own `config.json` under `pi_telemetry_*` and are harmless leftovers.
@@ -278,6 +299,13 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
   into the archive (with git history) and the github tree.
 
 ## 10. Changelog
+
+### 1.1.4
+
+- Add GPU, CPU and RAM power draw without changing the strip layout or CSS.
+- Keep absent readings explicit; reuse existing sensor polling and cache expiry.
+- Add a UI infographic and power documentation. All 15 offline checks pass.
+- Live hardware verification of power readings remains pending.
 
 ### 1.1.3
 
