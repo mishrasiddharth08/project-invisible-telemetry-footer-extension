@@ -764,13 +764,13 @@ class Probe:
 
     def profile_intervals(self):
         totals = [gpu["total_gb"] for gpu in self.gpu_static if gpu["total_gb"] > 0]
-        vram_gb = max(totals) if totals else 0.0
+        # Use the smallest card on mixed-GPU PCs so a larger card cannot make
+        # telemetry poll the smaller card more often. No CUDA allocation here.
+        vram_gb = min(totals) if totals else 0.0
         if vram_gb <= 0:
             return 1000, 2500
         if vram_gb <= 12:
-            return 750, 2000
-        if vram_gb <= 16:
-            return 500, 2000
+            return 750, 2500
         return 500, 2500
 
     def snapshot(self) -> dict:

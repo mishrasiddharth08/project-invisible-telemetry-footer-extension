@@ -143,8 +143,7 @@
       '<span class="pi-sub" data-s="' + key + '">' + esc(detail || "") + "</span>" +
       "</div>" +
       (key !== "swap" ? '<div class="pi-thermal"><span class="pi-thermal-label">' +
-        (key.indexOf("gpu") === 0 ? "GPU" : key.toUpperCase()) + ' TEMP · ' +
-        '<span data-w="' + key + '" title="Power draw">N/A W</span></span>' +
+        'Power consumption · <span data-w="' + key + '" title="Power consumption">N/A W</span></span>' +
         '<span class="pi-temp pi-unavailable" data-t="' + key + '">N/A</span></div>' : "") +
       '<div class="pi-gauge"><i data-g="' + key + '"></i></div>' +
       "</div>"

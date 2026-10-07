@@ -1,6 +1,6 @@
 # PROJECT INVISIBLE — Telemetry Strip
 
-Version **1.1.4** · MIT (this extension's code only)
+Version **1.1.5** · MIT (this extension's code only)
 
 ![Telemetry UI infographic: CPU, RAM, GPU temperatures and power](docs/telemetry-ui.svg)
 
@@ -127,7 +127,14 @@ CPU/RAM temperature support in this revision is Windows-specific.
 
 ### Live power draw
 
-Watts appear beside the temperature label, using the existing row and styling.
+The existing sensor row labels watts as **Power consumption**. The temperature
+badge displays the actual reading or `N/A`, with the same layout and styling.
+
+Automatic telemetry polling: 8/10/12 GB cards use 750 ms during generation;
+16/24/32 GB cards use 500 ms. All use 2500 ms when idle. Mixed-GPU PCs use the
+smallest card's profile. Manual intervals still apply with a 250 ms floor.
+These settings reduce telemetry polling work; they do not change model VRAM needs
+or image-generation speed. Hardware testing across all capacities is pending.
 
 | Component | Source | If unavailable |
 |---|---|---|
@@ -290,7 +297,7 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
 ## 9. Update / uninstall
 
 - **Update:** replace the folder contents, restart Forge fully when other work is finished.
-  Pinned at 1.1.4; never
+  Pinned at 1.1.5; never
   auto-updates, never phones home.
 - **Uninstall:** delete the folder, restart Forge. Stock UI restored. Your settings live
   in Forge's own `config.json` under `pi_telemetry_*` and are harmless leftovers.
@@ -299,6 +306,12 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
   into the archive (with git history) and the github tree.
 
 ## 10. Changelog
+
+### 1.1.5
+
+- Clear power-consumption labels; retain actual/N/A temperature badges and design.
+- Lower idle polling for smaller cards; use the smallest card on mixed-GPU PCs.
+- Six requested VRAM capacities covered by offline tests; all 16 checks pass.
 
 ### 1.1.4
 

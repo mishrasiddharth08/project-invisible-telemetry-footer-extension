@@ -87,8 +87,7 @@ test('legacy 1 ms settings have a floor, and hardware labels are explicit',()=>{
   assert.match(html,/KIT-123/);
   // Each temperature has a separate labelled row, not a crowded identity header.
   for (const k of ['cpu','ram','gpu0']) {
-    const label=k==='gpu0'?'GPU':k.toUpperCase();
-    assert.match(html,new RegExp(label+' TEMP · <span data-w="'+k+'" title="Power draw">N/A W</span></span><span class="pi-temp pi-unavailable" data-t="'+k+'">N/A</span>'));
+    assert.match(html,new RegExp('Power consumption · <span data-w="'+k+'" title="Power consumption">N/A W</span></span><span class="pi-temp pi-unavailable" data-t="'+k+'">N/A</span>'));
   }
   const s=sample(); s.cfg.idle_ms=2000; h.api.set(s,h.strip);
   assert.equal(h.api.interval(),2000);

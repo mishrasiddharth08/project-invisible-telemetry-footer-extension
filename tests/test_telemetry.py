@@ -102,6 +102,18 @@ class TelemetryTests(unittest.TestCase):
         for value in (None, True, -1, float('nan'), float('inf')):
             self.assertIsNone(probe_module.power_value(value))
 
+    def test_vram_profiles_and_mixed_cards(self):
+        probe = probe_module.Probe.__new__(probe_module.Probe)
+        for capacity in (8, 10, 12, 16, 24, 32):
+            with self.subTest(vram=capacity):
+                probe.gpu_static = [{'total_gb':capacity}]
+                self.assertEqual(probe.profile_intervals(),
+                                 (750 if capacity <= 12 else 500, 2500))
+        probe.gpu_static = [{'total_gb':32}, {'total_gb':8}]
+        self.assertEqual(probe.profile_intervals(), (750, 2500))
+        probe.gpu_static = []
+        self.assertEqual(probe.profile_intervals(), (1000, 2500))
+
     def poller(self, values=None):
         probe = FakeProbe()
         # Avoid hardware fingerprinting or config writes entirely.

@@ -1,4 +1,11 @@
-# Telemetry 1.1.4 validation
+# Telemetry 1.1.5 validation
+
+## October 7, 2026 follow-up
+
+- Power consumption labels replace ambiguous TEMP/wattage labels; temperature
+  badges retain the actual value or N/A. CSS and positioning are unchanged.
+- Profile regression covers 8/10/12/16/24/32 GB, mixed cards and CPU-only systems.
+  Seven JavaScript and nine Python checks passed. Hardware-wide testing is pending.
 
 ## October 7, 2026 power update
 
