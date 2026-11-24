@@ -37,6 +37,35 @@ class FakeProbe:
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_driver_failure_and_missing_middle_card(self):
+        p = probe_module.Probe.__new__(probe_module.Probe)
+        p.handles = [0]
+        p.gpu_static = [{'index':i, 'total_gb':8} for i in range(3)]
+        p.nvml = SimpleNamespace()  # memory query unavailable
+        self.assertEqual(p.gpu_memory(), [(None, 8)])
+        p.nvml = None
+        p.vram_backend = 'smi'
+        p._smi_memory_cache = (-100, [])
+        with patch.object(probe_module, 'smi_query', return_value='2,2048,8192\n1,N/A,8192\n0,0,8192'):
+            self.assertEqual(p.gpu_memory(), [(0,8), (None,8), (2,8)])
+
+    def test_expired_failure_and_disabled_snapshot(self):
+        probe, poller = self.poller()
+        poller._cache = {'sequence':1}
+        with patch.object(probe, 'snapshot', side_effect=RuntimeError('offline')):
+            with self.assertRaises(RuntimeError):
+                poller.cached(max_age=-1)
+            poller.opts_getter = lambda: {'enabled':False}
+            self.assertFalse(poller.snapshot_with_cfg()['cfg']['enabled'])
+
+    def test_monitor_fallback_without_duplicate_power(self):
+        import json
+        cpu = {'SensorType':'Power','Parent':'/intelcpu/0','Name':'CPU Package','Value':42}
+        ram = {'SensorType':'Temperature','Parent':'/ram/0','Name':'DIMM','Value':36}
+        result = SimpleNamespace(returncode=0, stdout=json.dumps([cpu])+'\n'+json.dumps([cpu,ram]))
+        with patch.object(probe_module.subprocess, 'run', return_value=result):
+            self.assertEqual(probe_module.TemperatureReader()._query(), {'cpu_power_w':42,'ram':36})
+
     def test_temperature_mapping_excludes_gpu_memory_and_bad_values(self):
         rows = [
             {'Parent':'/intelcpu/0', 'Name':'CPU Package', 'Value':65},

@@ -151,9 +151,10 @@
   }
 
   function memDetail(m, compact) {
+    if (m.used_gb == null) return "N/A";
     return (
       fmt(num(m.used_gb, 0), compact) + " / " + fmt(num(m.total_gb, 0), compact) +
-      (compact ? " GB" : " GiB")
+      " GiB"
     );
   }
 
@@ -212,7 +213,7 @@
   }
 
   /* Everything that moves, per cell: the percentage AND the text beside it.
-     Both are rewritten on every tick so the GB figures, the CPU clock and the
+     Both are rewritten on every tick so the GiB figures, the CPU clock and the
      percentage can never drift out of sync with each other. */
   function readings(s) {
     const compact = (s.cfg || {}).compact !== false;
@@ -226,7 +227,7 @@
     }
     (s.gpus || []).forEach(function (g) {
       out["gpu" + g.index] = {
-        pct: num(g.pct, 0),
+        pct: g.pct == null ? null : num(g.pct, 0),
         detail: num(g.total_gb, 0) > 0 ? memDetail(g, compact) : "N/A",
         temperature: g.temperature_c,
         power: g.power_w,
@@ -293,13 +294,14 @@
     Object.keys(goal).forEach(function (k) {
       const want = goal[k].pct;
       const detail = goal[k].detail;
-      const cls = "pi-" + tier(want, amber, red);
+      const cls = want === null ? "pi-unavailable" : "pi-" + tier(want, amber, red);
       strips.forEach(function (el) {
         const valEl = el.querySelector('[data-v="' + k + '"]');
         if (valEl) {
-          const text = cfg.compact === false ? want.toFixed(1) : String(Math.round(want));
+          const text = want === null ? "N/A" : cfg.compact === false ? want.toFixed(1) : String(Math.round(want));
           if (valEl.textContent !== text) valEl.textContent = text;
           if (valEl.className !== "pi-val " + cls) valEl.className = "pi-val " + cls;
+          if (valEl.nextElementSibling) valEl.nextElementSibling.hidden = want === null;
         }
         const subEl = el.querySelector('[data-s="' + k + '"]');
         if (subEl && subEl.textContent !== detail) subEl.textContent = detail;
@@ -449,18 +451,18 @@
     const r = s.ram || {};
     if (num(r.total_gb, 0) > 0) {
       lines.push("RAM  " + (ramModel(hw) || "?") + "  ·  " +
-        fmt(num(r.total_gb, 0), true) + " GB total");
+        fmt(num(r.total_gb, 0), true) + " GiB total");
     }
     (s.gpus || []).forEach(function (g) {
       lines.push("GPU" + g.index + "  " + (g.name || "?") +
         (g.cuda_cap ? "  ·  CUDA " + g.cuda_cap : "") +
-        (num(g.total_gb, 0) > 0 ? "  ·  " + fmt(num(g.total_gb, 0), true) + " GB" : ""));
+        (num(g.total_gb, 0) > 0 ? "  ·  " + fmt(num(g.total_gb, 0), true) + " GiB" : ""));
     });
     if (cfg.driver) lines.push("Driver  " + cfg.driver);
     const d = s.disk || {};
     if (num(d.total_gb, 0) > 0) {
       lines.push("Disk  " + (d.path || "") + "  ·  " + fmt(num(d.free_gb, 0), true) +
-        " GB free of " + fmt(num(d.total_gb, 0), true));
+        " GiB free of " + fmt(num(d.total_gb, 0), true));
     }
     let hint = "Click to copy a full system snapshot";
     if ((s.gpus || []).length > 1) hint += "  |  Click the GPU cell to switch card";
@@ -482,22 +484,22 @@
     const r = s.ram || {};
     if (num(r.total_gb, 0) > 0) {
       bits.push("RAM " + (ramModel(hw) ? ramModel(hw) + " " : "") +
-        fmt(num(r.used_gb, 0), true) + "/" + fmt(num(r.total_gb, 0), true) + "GB (" +
+        fmt(num(r.used_gb, 0), true) + "/" + fmt(num(r.total_gb, 0), true) + "GiB (" +
         Math.round(num(r.pct, 0)) + "%)");
     }
     (s.gpus || []).forEach(function (g) {
       if (num(g.total_gb, 0) > 0) {
-        bits.push("GPU" + g.index + " " + (g.name || "") + " " + fmt(num(g.used_gb, 0), true) +
-          "/" + fmt(num(g.total_gb, 0), true) + "GB (" + Math.round(num(g.pct, 0)) + "%)");
+        bits.push("GPU" + g.index + " " + (g.name || "") + " " + memDetail(g, true) +
+          (g.pct == null ? "" : " (" + Math.round(g.pct) + "%)"));
       }
     });
     const sw = s.swap || {};
     if (sw.present && num(sw.total_gb, 0) > 0) {
-      bits.push("SWAP " + fmt(num(sw.used_gb, 0), true) + "/" + fmt(num(sw.total_gb, 0), true) + "GB");
+      bits.push("SWAP " + fmt(num(sw.used_gb, 0), true) + "/" + fmt(num(sw.total_gb, 0), true) + "GiB");
     }
     const d = s.disk || {};
     if (num(d.total_gb, 0) > 0) {
-      bits.push("Disk " + fmt(num(d.free_gb, 0), true) + "GB free");
+      bits.push("Disk " + fmt(num(d.free_gb, 0), true) + "GiB free");
     }
     bits.push("PI-Telemetry " + new Date(num(s.ts, Date.now() / 1000) * 1000).toISOString());
     bits.push("Temperatures: CPU " + temperatureText(c.temperature_c) + ", RAM " + temperatureText(r.temperature_c));

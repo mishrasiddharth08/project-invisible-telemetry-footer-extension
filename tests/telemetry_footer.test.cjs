@@ -67,7 +67,7 @@ test('a sudden memory jump updates number, amount, bar and colour together',()=>
   const h=harness(); h.api.paint(); h.api.set(sample(90),h.strip); h.api.paint();
   for(const k of ['ram','gpu0']) {
     assert.equal(h.nodes['[data-v="'+k+'"]'].textContent,'90');
-    assert.equal(h.nodes['[data-s="'+k+'"]'].textContent,'90.0 / 100.0 GB');
+    assert.equal(h.nodes['[data-s="'+k+'"]'].textContent,'90.0 / 100.0 GiB');
     assert.equal(h.nodes['[data-g="'+k+'"]'].style.width,'90.0%');
     assert.equal(h.nodes['[data-v="'+k+'"]'].className,'pi-val pi-warn');
   }
@@ -77,6 +77,17 @@ test('a sudden memory jump updates number, amount, bar and colour together',()=>
   assert.equal(h.nodes['[data-s="cpu"]'].textContent,'4.20 GHz');
   h.api.set(sample(20),h.strip); h.api.paint();
   assert.equal(h.nodes['[data-v="ram"]'].className,'pi-val pi-ok');
+});
+
+test('unknown GPU memory is neutral and recovers on a valid zero',()=>{
+  const h=harness(), s=sample();
+  s.gpus[0].pct=null; s.gpus[0].used_gb=null;
+  h.api.set(s,h.strip); h.api.paint();
+  assert.equal(h.nodes['[data-v="gpu0"]'].textContent,'N/A');
+  assert.equal(h.nodes['[data-s="gpu0"]'].textContent,'N/A');
+  assert.match(h.nodes['[data-g="gpu0"]'].className,/unavailable/);
+  s.gpus[0].pct=0; s.gpus[0].used_gb=0; h.api.paint();
+  assert.equal(h.nodes['[data-v="gpu0"]'].textContent,'0');
 });
 
 test('legacy 1 ms settings have a floor, and hardware labels are explicit',()=>{

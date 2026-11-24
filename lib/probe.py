@@ -418,8 +418,8 @@ class TemperatureReader:
             "try { $rows=@(Get-CimInstance -Namespace $ns -ClassName Sensor "
             "-Filter \"SensorType = 'Temperature' OR SensorType = 'Power'\" "
             "| Select-Object Name,Parent,Identifier,SensorType,Value); "
-            "if ($rows.Count -gt 0) { ConvertTo-Json -InputObject $rows -Compress; exit 0 } "
-            "} catch {} }; Write-Output '[]'"
+            "if ($rows.Count -gt 0) { ConvertTo-Json -InputObject $rows -Compress } "
+            "} catch {} }"
         )
         result = subprocess.run(
             ['powershell', '-NoProfile', '-NonInteractive', '-Command', command],
@@ -428,10 +428,14 @@ class TemperatureReader:
         )
         if result.returncode != 0:
             return {}
-        rows = json.loads(result.stdout)
-        if isinstance(rows, dict):
-            rows = [rows]
-        return {**self.select(rows), **self.select_power(rows)} if isinstance(rows, list) else {}
+        values = {}
+        for line in result.stdout.splitlines():
+            rows = json.loads(line)
+            readings = {**self.select(rows), **self.select_power(rows)}
+            for key, value in readings.items():
+                if value is not None:
+                    values.setdefault(key, value)
+        return values
 
     def _update(self):
         try:
@@ -626,7 +630,7 @@ class Probe:
         if self.nvml is not None:
             result = []
             for index, handle in enumerate(self.handles):
-                used = 0.0
+                used = None
                 total = self.gpu_static[index]["total_gb"] if index < len(self.gpu_static) else 0.0
                 try:
                     memory = self.nvml.nvmlDeviceGetMemoryInfo(handle)
@@ -648,22 +652,19 @@ class Probe:
             now = time.monotonic()
             if now - self._smi_memory_cache[0] < SMI_MIN_INTERVAL:
                 return self._smi_memory_cache[1]
-            text = smi_query("memory.used,memory.total")
-            rows = []
+            text = smi_query("index,memory.used,memory.total")
+            by_index = {}
             if text:
                 for line in text.splitlines():
                     parts = [part.strip() for part in line.split(",")]
-                    if len(parts) < 2:
+                    if len(parts) != 3:
                         continue
                     try:
-                        rows.append(
-                            (
-                                gb(float(parts[0]) * 1024 * 1024),
-                                gb(float(parts[1]) * 1024 * 1024),
-                            )
-                        )
+                        by_index[int(parts[0])] = (gb(float(parts[1]) * 1024**2),
+                                                   gb(float(parts[2]) * 1024**2))
                     except ValueError:
                         continue
+            rows = [by_index.get(g["index"], (None, g["total_gb"])) for g in self.gpu_static]
             self._smi_memory_cache = (now, rows)
             return rows
         return []
@@ -818,17 +819,17 @@ class Probe:
         ram['power_w'] = temperatures.get('ram_power_w')
         gpus = []
         for index, gpu in enumerate(self.gpu_static):
-            used = 0.0
+            used = None
             total = gpu["total_gb"]
             if index < len(memories):
                 used, total = memories[index]
                 total = total or gpu["total_gb"]
-            pct = round(used / total * 100, 1) if total > 0 else 0.0
+            pct = round(used / total * 100, 1) if used is not None and total > 0 else None
             gpus.append(
                 {
                     "index": gpu["index"],
                     "name": gpu["name"],
-                    "used_gb": round(used, 2),
+                    "used_gb": round(used, 2) if used is not None else None,
                     "total_gb": round(total, 2),
                     "pct": pct,
                     "temperature_c": self.gpu_temperature(index),

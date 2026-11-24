@@ -72,6 +72,7 @@ class Poller:
         self._config_lock = threading.Lock()
         self._thread = None
         self._stop = threading.Event()
+        self._saved_config = {}
         self.ensure_config()
 
     def start(self):
@@ -93,7 +94,8 @@ class Poller:
     def _loop(self):
         while not self._stop.is_set():
             try:
-                self.refresh()
+                if self.effective_cfg()["enabled"]:
+                    self.refresh()
             except Exception:
                 pass
             self._stop.wait(self._next_interval())
@@ -125,10 +127,7 @@ class Poller:
             age = time.monotonic() - self._cache_monotonic
         if snapshot is not None and age <= max_age:
             return snapshot
-        try:
-            return self.refresh()
-        except Exception:
-            return snapshot
+        return self.refresh()
 
     def effective_cfg(self) -> dict:
         try:
@@ -167,7 +166,7 @@ class Poller:
         if cfg["position"] not in POSITIONS:
             cfg["position"] = DEFAULT_CFG["position"]
         cfg["busy"] = bool(self.busy_getter())
-        config = self.read_config()
+        config = self._saved_config
         ui = config.get("ui") if isinstance(config.get("ui"), dict) else {}
         try:
             gpu_index = int(ui.get("gpu_index", 0))
@@ -188,6 +187,8 @@ class Poller:
 
     def snapshot_with_cfg(self) -> dict:
         cfg = self.effective_cfg()
+        if not cfg["enabled"]:
+            return {"cfg": cfg, "cpu": {}, "ram": {}, "gpus": []}
         wanted_ms = cfg["busy_ms"] if cfg["busy"] else cfg["idle_ms"]
         snapshot = dict(self.cached(max_age=max(wanted_ms, 1) / 1000.0) or {})
         snapshot["cfg"] = cfg
@@ -207,11 +208,13 @@ class Poller:
             json.dump(data, file, indent=2, ensure_ascii=False)
             file.write("\n")
         os.replace(temporary, self.config_path)
+        self._saved_config = data
         return True
 
     def ensure_config(self) -> bool:
         with self._config_lock:
             config = self.read_config()
+            self._saved_config = config
             fingerprint = self.probe.fingerprint()
             hardware = config.get("hardware")
             if config.get("version") == 1 and isinstance(hardware, dict) and hardware == fingerprint:
