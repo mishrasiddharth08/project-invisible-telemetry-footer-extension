@@ -1,4 +1,10 @@
-# Telemetry 1.1.5 validation
+# Telemetry 1.1.6 validation
+
+November 26, 2026: 22 Python and 12 JavaScript tests passed using simulated
+hardware, requests and browser events. An additional in-process check against
+the installed Gradio app verified that unsigned requests to both routes receive
+HTTP 401 and a signed session can read a snapshot. Full Forge restart, physical
+Linux/multi-GPU hardware and interactive browser checks remain pending.
 
 ## October 7, 2026 follow-up
 

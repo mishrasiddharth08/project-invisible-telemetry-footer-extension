@@ -15,7 +15,7 @@ function sample(pct = 20, compact = true) {
   };
 }
 
-function harness() {
+function harness(options = {}) {
   let now = 0, nextId = 0;
   const timers = new Map(), requests = [], events = {};
   const nodes = {};
@@ -26,14 +26,35 @@ function harness() {
   }
   nodes['[data-pi-connection]'] = {textContent:'', hidden:true};
   const classes = new Set();
+  function element(className = '') {
+    const el = {className, style:{}, isConnected:true, attributes:{}, listeners:{}, textContent:'',
+      setAttribute(k,v){this.attributes[k]=v;}, addEventListener(k,fn){this.listeners[k]=fn;},
+      focus(){doc.activeElement=this;}, select(){},
+    };
+    const names = new Set(className.split(' '));
+    el.classList = {add:k=>names.add(k), remove:k=>names.delete(k), contains:k=>names.has(k),
+      toggle:(k,v)=>v ? names.add(k) : names.delete(k)};
+    return el;
+  }
+  let gpuCells = [], copyButton;
+  const copyStatus = {textContent:''};
   const strip = {
     style:{}, isConnected:true,
-    classList:{toggle:(k,v)=>v ? classes.add(k) : classes.delete(k)},
-    querySelector:s=>nodes[s] || null, querySelectorAll:()=>[],
+    classList:{add:k=>classes.add(k),remove:k=>classes.delete(k),toggle:(k,v)=>v ? classes.add(k) : classes.delete(k)},
+    contains:el=>!!el && (gpuCells.includes(el) || el===copyButton),
+    querySelector:s=>s==='.pi-gpu' ? gpuCells[0] : s==='.pi-copy' ? copyButton : s==='.pi-copy-status' ? copyStatus : nodes[s] || null,
+    querySelectorAll:s=>s==='.pi-gpu' ? gpuCells : [],
+    set innerHTML(html) {
+      gpuCells = [...html.matchAll(/class="pi-cell pi-gpu"/g)].map(()=>element('pi-gpu'));
+      copyButton = element('pi-copy');
+    },
   };
-  const doc = {hidden:false, addEventListener:(k,fn)=>events[k]=fn};
+  const body = {children:[],appendChild(el){this.children.push(el);el.parentNode=this;},
+    removeChild(el){this.children.splice(this.children.indexOf(el),1);el.parentNode=null;}};
+  const doc = {hidden:false, body, createElement:()=>element(),
+    execCommand:()=>options.legacyResult ?? false, addEventListener:(k,fn)=>events[k]=fn};
   const context = {
-    console, document:doc, window:{addEventListener:(k,fn)=>events[k]=fn},
+    console, document:doc, navigator:options.navigator || {}, window:{addEventListener:(k,fn)=>events[k]=fn},
     performance:{now:()=>now}, AbortController,
     onUiLoaded:()=>{}, onUiUpdate:()=>{}, MutationObserver:class {observe(){}},
     setTimeout:(fn,ms)=>{ const id=++nextId; timers.set(id,{fn,at:now+ms}); return id; },
@@ -44,7 +65,7 @@ function harness() {
   vm.createContext(context);
   const source = fs.readFileSync(path.join(__dirname,'../javascript/telemetry_footer.js'),'utf8');
   // Expose functions only inside this isolated VM; production source is untouched.
-  const hook = 'globalThis.api={set(s,el){last=s;strips=[el];shapeKey=shapeOf(s);position=s.cfg.position;started=true;},paint,maybeFetch,interval,buildHtml,state(){return {last,inFlight,connectionLost,failures};}};})();';
+  const hook = 'globalThis.api={set(s,el){last=s;strips=[el];shapeKey=shapeOf(s);position=s.cfg.position;started=true;},rebuild(){shapeKey="";paint();},onCopy,onGpuCycle,makeStrip,paint,maybeFetch,interval,buildHtml,state(){return {last,inFlight,connectionLost,failures,localGpuIndex};}};})();';
   assert.match(source, /\}\)\(\);\s*$/);
   vm.runInContext(source.replace(/\}\)\(\);\s*$/,hook),context);
   context.api.set(sample(),strip);
@@ -59,7 +80,7 @@ function harness() {
     now=until;
     await flush();
   }
-  return {api:context.api,nodes,strip,doc,events,classes,timers,requests,flush,advance,
+  return {api:context.api,nodes,strip,doc,events,classes,timers,requests,flush,advance,copyStatus,
     reply:(n,s)=>requests[n].resolve({ok:true,json:()=>Promise.resolve(s)})};
 }
 
@@ -184,4 +205,86 @@ test('hidden pages cancel timers and resume without accepting old responses',asy
   assert.equal(h.api.state().last.ram.pct,80);
   h.events.pagehide(); assert.equal(h.timers.size,0);
   h.events.pageshow(); await h.advance(0); assert.equal(h.requests.length,3);
+});
+
+function multiGpu(h) {
+  const s=sample(); s.cfg.gpu_index=0;
+  s.gpus.push({...s.gpus[0],index:1,name:'Second GPU'});
+  h.api.set(s,h.strip); h.api.rebuild();
+  return s;
+}
+const activation = () => ({stopPropagation(){},preventDefault(){}});
+const saved = h => h.requests.filter(r=>r.options.method==='POST');
+
+test('rapid GPU selections serialize saves and ignore snapshots begun before confirmation',async()=>{
+  const h=harness(), s=multiGpu(h);
+  h.api.onGpuCycle(activation()); await h.flush();
+  h.api.onGpuCycle(activation()); h.api.onGpuCycle(activation());
+  assert.equal(saved(h).length,1);
+  h.api.maybeFetch(); await h.flush();
+  saved(h)[0].resolve({ok:true,json:async()=>({ok:true})}); await h.flush();
+  assert.equal(saved(h).length,2);
+  assert.equal(JSON.parse(saved(h)[1].options.body).gpu_index,0);
+  saved(h)[1].resolve({ok:true,json:async()=>({ok:true})}); await h.flush();
+  const poll=h.requests.find(r=>r.options.method!=='POST');
+  poll.resolve({ok:true,json:async()=>({...s,cfg:{...s.cfg,gpu_index:1}})}); await h.flush();
+  assert.equal(h.api.state().localGpuIndex,0);
+  h.api.maybeFetch(); await h.flush();
+  h.requests.at(-1).resolve({ok:true,json:async()=>s}); await h.flush();
+  assert.equal(h.api.state().localGpuIndex,null);
+});
+
+test('rejected and stalled GPU saves restore the last confirmed selection',async()=>{
+  for (const failure of ['http','json','network','timeout','body']) {
+    const h=harness(); multiGpu(h);
+    h.api.onGpuCycle(activation()); await h.flush();
+    saved(h)[0].resolve({ok:true,json:async()=>({ok:true})}); await h.flush();
+    h.api.onGpuCycle(activation()); await h.flush();
+    const req=saved(h)[1];
+    if(failure==='http') req.resolve({ok:false});
+    if(failure==='json') req.resolve({ok:true,json:async()=>({ok:false})});
+    if(failure==='network') req.reject(new Error('offline'));
+    if(failure==='body') req.resolve({ok:true,json:()=>new Promise(()=>{})});
+    await h.flush();
+    if(failure==='timeout' || failure==='body') {
+      await h.advance(5000); assert.equal(req.options.signal.aborted,true);
+      req.resolve({ok:true,json:async()=>({ok:true})}); await h.flush();
+    }
+    assert.equal(h.api.state().localGpuIndex,1,failure);
+  }
+});
+
+test('GPU keyboard activation preserves focus and never triggers copy',async()=>{
+  const h=harness(); multiGpu(h);
+  for(const key of ['Enter',' ']) {
+    const gpu=h.strip.querySelector('.pi-gpu'); gpu.focus();
+    assert.equal(gpu.attributes.role,'button'); assert.equal(gpu.attributes.tabindex,'0');
+    let stopped=false, prevented=false;
+    gpu.listeners.keydown({key,stopPropagation(){stopped=true;},preventDefault(){prevented=true;}});
+    assert.equal(stopped,true); assert.equal(prevented,true);
+    assert.equal(h.doc.activeElement,h.strip.querySelector('.pi-gpu'));
+  }
+  assert.equal(h.copyStatus.textContent,'');
+  const before=h.api.state().localGpuIndex;
+  h.strip.querySelector('.pi-gpu').listeners.keydown({key:' ',repeat:true,preventDefault(){}});
+  assert.equal(h.api.state().localGpuIndex,before);
+  assert.match(h.api.buildHtml(sample()),/<button type="button" class="pi-copy" aria-label="Copy full system snapshot">/);
+});
+
+test('copy feedback waits for success and reports fallback failure accurately',async()=>{
+  let resolve, reject;
+  const h=harness({navigator:{clipboard:{writeText:()=>new Promise((a,b)=>{resolve=a;reject=b;})}}});
+  const first=h.api.onCopy({currentTarget:h.strip});
+  assert.equal(h.copyStatus.textContent,'Copying…'); assert.equal(h.classes.has('pi-copied'),false);
+  resolve(); await first;
+  assert.equal(h.copyStatus.textContent,'Copied'); assert.equal(h.classes.has('pi-copied'),true);
+  const second=h.api.onCopy({currentTarget:h.strip}); reject(new Error('denied')); await second;
+  assert.equal(h.copyStatus.textContent,'Copy failed'); assert.equal(h.classes.has('pi-copied'),false);
+  assert.equal(h.doc.body.children.length,0);
+  for(const legacyResult of [true,false]) {
+    const fallback=harness({legacyResult});
+    await fallback.api.onCopy({currentTarget:fallback.strip});
+    assert.equal(fallback.copyStatus.textContent,legacyResult?'Copied':'Copy failed');
+    assert.equal(fallback.doc.body.children.length,0);
+  }
 });

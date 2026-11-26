@@ -1,6 +1,6 @@
 # PROJECT INVISIBLE — Telemetry Strip
 
-Version **1.1.5** · MIT (this extension's code only)
+Version **1.1.6** · MIT (this extension's code only)
 
 ![Telemetry UI infographic: CPU, RAM, GPU temperatures and power](docs/telemetry-ui.svg)
 
@@ -104,8 +104,8 @@ Both thresholds are configurable.
 ### Live temperatures
 
 CPU, RAM and GPU cells include a temperature in degrees Celsius. GPU temperature
-comes from the existing NVIDIA NVML connection on every shared snapshot (normally
-250 ms); it is GPU core temperature, not graphics-memory junction temperature.
+comes from the existing NVIDIA NVML connection on every shared snapshot at the
+selected refresh interval. It measures GPU core temperature.
 No CUDA workload is created. Backends without a temperature sensor show `N/A`.
 
 On Windows, CPU and RAM temperatures are read from an **already running**
@@ -156,7 +156,7 @@ is needed; hardware names remain visible on smaller screens.
 | Action | Result |
 |---|---|
 | Hover the strip | Full tooltip: CPU model, cores, RAM kit, every GPU + CUDA level, driver, disk free |
-| Click the strip | Copies a one-line system snapshot to the clipboard |
+| Click the strip or use the keyboard Copy control | Copies a one-line system snapshot to the clipboard |
 | Click the **GPU** cell (multi-GPU) | Cycles GPU 0 → GPU 1 → … → all → back; remembered in `config.json` |
 | `LIVE` pill | A generation is running |
 
@@ -173,8 +173,8 @@ Settings tab → **"Project Invisible Telemetry"**:
 | Compact numbers | on | One decimal; off = two |
 | Amber warning threshold % | 80 | Where green becomes amber |
 | Red critical threshold % | 95 | Where amber becomes red |
-| Idle refresh interval, ms | 1 | `1` = fastest supported sampling (250 ms); `0` = auto from the VRAM profile |
-| Generate-time refresh interval, ms | 1 | Same, while generating |
+| Idle refresh interval, ms | 0 | Automatic VRAM profile. Set 1 for the fastest supported sampling (250 ms). |
+| Generate-time refresh interval, ms | 0 | Same, while generating. Saved preferences take precedence. |
 
 Position changes apply **live** — the strip re-mounts itself without a page reload.
 
@@ -230,11 +230,10 @@ Validation status for this update is recorded in [VALIDATION.md](VALIDATION.md).
 
 ### One caveat worth knowing
 
-`/pi-telemetry/snapshot` is registered on Forge's FastAPI app, which sits **outside**
-gradio's `--gradio-auth`. On localhost that is irrelevant. If you run Forge with
-`--listen` or `--share`, anyone who can reach the port can read your hardware summary
-(CPU/GPU model, RAM totals, install path, free disk). Turn the extension off for public
-exposure if that matters to you.
+Both telemetry endpoints use Forge's Gradio sign-in check. Local sessions work
+without a password. Enable Gradio sign-in when sharing Forge over the network,
+including through a reverse proxy. Switching telemetry off hides hardware data
+and prevents GPU-selection changes.
 
 ## 6. Fallback matrix
 
@@ -297,7 +296,7 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
 ## 9. Update / uninstall
 
 - **Update:** replace the folder contents, restart Forge fully when other work is finished.
-  Pinned at 1.1.5; never
+  Pinned at 1.1.6; never
   auto-updates, never phones home.
 - **Uninstall:** delete the folder, restart Forge. Stock UI restored. Your settings live
   in Forge's own `config.json` under `pi_telemetry_*` and are harmless leftovers.
@@ -306,6 +305,13 @@ POST /pi-telemetry/config     body: { "gpu_index": 0 }   (0..N-1, or -1 = all GP
   into the archive (with git history) and the github tree.
 
 ## 10. Changelog
+
+### 1.1.6
+
+- Protect shared telemetry with Forge sign-in and hide hardware details when disabled.
+- Use automatic polling on new installs and keep percentage alert thresholds in order.
+- Fix Linux CPU load and RAM speed, multi-GPU fallback and independent sensor timeouts.
+- Improve GPU switching, keyboard controls and clipboard feedback.
 
 ### 1.1.5
 

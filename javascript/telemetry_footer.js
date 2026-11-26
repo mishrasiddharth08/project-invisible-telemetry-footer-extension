@@ -22,6 +22,10 @@
   let warnedNoAnchor = false;
   let last = null;
   let localGpuIndex = null;
+  let gpuRevision = 0;
+  let gpuSavedRevision = -1;
+  let gpuSaving = false;
+  let confirmedGpuIndex = null;
   let position = null;
   let inFlight = false;
   let ctrl = null;
@@ -208,6 +212,8 @@
       html += c;
     });
     if (s.busy) html += '<span class="pi-live" title="generation running">LIVE</span>';
+    html += '<button type="button" class="pi-copy" aria-label="Copy full system snapshot">Copy</button>';
+    html += '<span class="pi-copy-status" role="status" aria-live="polite"></span>';
     html += '<span class="pi-connection" data-pi-connection role="status" hidden></span>';
     return html;
   }
@@ -277,13 +283,25 @@
       shapeKey = key;
       const html = buildHtml(last);
       strips.forEach(function (el) {
+        const focused = el.contains(document.activeElement) ? document.activeElement : null;
+        const focusGpu = focused && focused.classList.contains("pi-gpu");
+        const focusCopy = focused && focused.classList.contains("pi-copy");
         el.innerHTML = html;
         if ((last.gpus || []).length > 1) {
           el.querySelectorAll(".pi-gpu").forEach(function (gpuCell) {
             gpuCell.classList.add("pi-click");
+            gpuCell.setAttribute("role", "button");
+            gpuCell.setAttribute("tabindex", "0");
+            gpuCell.setAttribute("aria-label", "Switch GPU display; showing " + gpuCell.textContent);
             gpuCell.addEventListener("click", onGpuCycle);
+            gpuCell.addEventListener("keydown", function (e) {
+              if (!e.repeat && (e.key === "Enter" || e.key === " ")) onGpuCycle(e);
+              else if (e.key === " ") e.preventDefault();
+            });
           });
         }
+        const restore = focusGpu ? el.querySelector(".pi-gpu") : focusCopy ? el.querySelector(".pi-copy") : null;
+        if (restore) restore.focus();
       });
     }
 
@@ -371,6 +389,8 @@
     if (inFlight || suspended || document.hidden) return;
     inFlight = true;
     const serial = ++requestSerial;
+    const gpuReadRevision = gpuRevision;
+    const gpuReadSaved = gpuSavedRevision === gpuRevision;
     ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     const controller = ctrl;
     const options = { cache: "no-store" };
@@ -397,6 +417,9 @@
           throw new Error("invalid telemetry snapshot");
         }
         last = s;
+        if (gpuReadSaved && gpuReadRevision === gpuRevision && s.cfg.gpu_index === localGpuIndex) {
+          localGpuIndex = null;
+        }
         lastReceivedAt = Date.now();
         failures = 0;
         connectionLost = false;
@@ -512,47 +535,90 @@
   }
 
   function legacyCopy(text) {
+    let area;
+    const focused = document.activeElement;
     try {
-      const area = document.createElement("textarea");
+      area = document.createElement("textarea");
       area.value = text;
       area.style.position = "fixed";
       area.style.opacity = "0";
       document.body.appendChild(area);
       area.select();
-      document.execCommand("copy");
-      document.body.removeChild(area);
-    } catch (e) {}
+      return document.execCommand("copy") === true;
+    } catch (e) { return false; }
+    finally {
+      if (area && area.parentNode) area.parentNode.removeChild(area);
+      if (focused && focused.isConnected) focused.focus();
+    }
   }
 
-  function copyText(text) {
+  async function copyText(text) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).catch(function () { legacyCopy(text); });
-        return;
+        await navigator.clipboard.writeText(text);
+        return true;
       }
     } catch (e) {}
-    legacyCopy(text);
+    return legacyCopy(text);
   }
 
-  function onCopy(e) {
+  async function onCopy(e) {
     if (!last) return;
-    copyText(buildCopyText(last));
     const el = e.currentTarget;
-    el.classList.add("pi-copied");
-    setTimeout(function () { el.classList.remove("pi-copied"); }, 450);
+    const serial = el.piCopySerial = (el.piCopySerial || 0) + 1;
+    clearTimeout(el.piCopyTimer);
+    el.classList.remove("pi-copied");
+    const pending = el.querySelector(".pi-copy-status");
+    if (pending) pending.textContent = "Copying…";
+    const copied = await copyText(buildCopyText(last));
+    if (serial !== el.piCopySerial) return;
+    el.classList.toggle("pi-copied", copied);
+    const status = el.querySelector(".pi-copy-status");
+    if (status) status.textContent = copied ? "Copied" : "Copy failed";
+    el.piCopyTimer = setTimeout(function () {
+      el.classList.remove("pi-copied");
+      if (status) status.textContent = "";
+    }, 2000);
   }
 
-  function saveGpuIndex(index) {
+  async function saveGpuIndex() {
+    if (gpuSaving) return;
+    gpuSaving = true;
+    const revision = gpuRevision;
+    const index = localGpuIndex;
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let timeout;
     try {
-      fetch(CONFIG_URL, {
+      const request = Promise.resolve().then(function () { return fetch(CONFIG_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gpu_index: index }),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (j) { if (j && j.ok) localGpuIndex = null; })
-        .catch(function () {});
-    } catch (e) {}
+        ...(controller ? { signal: controller.signal } : {}),
+      }); }).then(function (response) {
+        if (!response.ok) throw new Error("GPU setting save failed");
+        return response.json();
+      });
+      const deadline = new Promise(function (_, reject) {
+        timeout = setTimeout(function () {
+          if (controller) controller.abort();
+          reject(new Error("GPU setting save timed out"));
+        }, REQUEST_TIMEOUT_MS);
+      });
+      const result = await Promise.race([request, deadline]);
+      if (!result || !result.ok) throw new Error("GPU setting save rejected");
+      confirmedGpuIndex = index;
+      if (revision === gpuRevision) gpuSavedRevision = revision;
+    } catch (e) {
+      if (revision === gpuRevision) {
+        localGpuIndex = confirmedGpuIndex;
+        shapeKey = "";
+        paint();
+      }
+    } finally {
+      clearTimeout(timeout);
+      gpuSaving = false;
+      if (revision !== gpuRevision) saveGpuIndex();
+    }
   }
 
   function onGpuCycle(e) {
@@ -560,13 +626,15 @@
     e.preventDefault();
     if (!last || (last.gpus || []).length < 2) return;
     const cfg = last.cfg || {};
+    if (localGpuIndex === null) confirmedGpuIndex = num(cfg.gpu_index, 0);
     const current = localGpuIndex !== null ? localGpuIndex : num(cfg.gpu_index, 0);
     let next = current + 1;
     if (next >= last.gpus.length) next = -1;
     localGpuIndex = next;
+    gpuRevision += 1;
     shapeKey = "";
     paint();
-    saveGpuIndex(next);
+    saveGpuIndex();
   }
 
   /* --------------------------------------------------------------- mount */

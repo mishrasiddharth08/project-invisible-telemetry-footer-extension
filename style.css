@@ -40,6 +40,35 @@
     background: color-mix(in srgb, var(--pi-ok) 8%, transparent);
 }
 
+.pi-telemetry-strip .pi-copy {
+    opacity: 0;
+    align-self: center;
+    margin: 3px;
+    padding: 3px 8px;
+    border: 1px solid var(--pi-line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--pi-ink);
+    font: inherit;
+    font-size: 11px;
+    cursor: copy;
+}
+
+.pi-telemetry-strip:hover .pi-copy,
+.pi-telemetry-strip .pi-copy:focus-visible { opacity: 1; }
+
+.pi-telemetry-strip .pi-copy-status {
+    align-self: center;
+    color: var(--pi-mute);
+    font-size: 11px;
+}
+
+.pi-telemetry-strip .pi-copy:focus-visible,
+.pi-telemetry-strip .pi-click:focus-visible {
+    outline: 2px solid var(--pi-ok);
+    outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------- cells */
 
 .pi-telemetry-strip .pi-cell {

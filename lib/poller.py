@@ -156,6 +156,8 @@ class Poller:
         cfg["requested_busy_ms"] = poll_busy
         cfg["requested_idle_ms"] = poll_idle
         cfg["sample_ms"] = SAMPLE_INTERVAL_MS
+        cfg["amber"] = min(99, max(0, cfg["amber"]))
+        cfg["red"] = min(100, max(cfg["amber"] + 1, cfg["red"]))
         for component in ('cpu', 'gpu', 'ram'):
             warn = 'temp_' + component + '_warn'
             crit = 'temp_' + component + '_crit'
@@ -188,7 +190,7 @@ class Poller:
     def snapshot_with_cfg(self) -> dict:
         cfg = self.effective_cfg()
         if not cfg["enabled"]:
-            return {"cfg": cfg, "cpu": {}, "ram": {}, "gpus": []}
+            return {"cfg": {"enabled": False}, "cpu": {}, "ram": {}, "gpus": []}
         wanted_ms = cfg["busy_ms"] if cfg["busy"] else cfg["idle_ms"]
         snapshot = dict(self.cached(max_age=max(wanted_ms, 1) / 1000.0) or {})
         snapshot["cfg"] = cfg

@@ -4,6 +4,7 @@ from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import threading
+import subprocess
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -37,6 +38,108 @@ class FakeProbe:
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_linux_cpu_excludes_guest_and_counts_iowait_as_idle(self):
+        times = namedtuple('Times', 'user nice system idle iowait irq softirq steal guest guest_nice')
+        probe = probe_module.Probe.__new__(probe_module.Probe)
+        probe.psutil = SimpleNamespace(cpu_times=lambda: times(40, 10, 10, 30, 10, 0, 0, 0, 8, 2))
+        self.assertEqual(probe._cpu_times_pair(), (40, 100))
+        probe._cpu_times_prev = (0, 0)
+        probe._cpu_cache = (0, 0)
+        self.assertEqual(probe._sample_cpu_pct(), 60)
+
+    def test_linux_ram_configured_speed_and_empty_slots(self):
+        text = '''Memory Device
+    Size: 32768 MB
+    Type: DDR5
+    Speed: 6400 MT/s
+    Configured Memory Speed: 4800 MT/s
+    Manufacturer: Kingston
+Memory Device
+    Size: No Module Installed
+Memory Device
+    Size: 32 GB
+    Speed: 6400 MT/s
+    Configured Clock Speed: 4800 MHz
+'''
+        with patch.object(probe_module.shutil, 'which', return_value='dmidecode'), patch.object(
+                probe_module.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=text)):
+            info = probe_module.ram_hardware_linux()
+        self.assertEqual((info['modules'], info['speed_mhz']), (2, 4800))
+
+    def test_complete_first_provider_skips_second(self):
+        values = {'cpu':65, 'ram':40, 'cpu_power_w':50, 'ram_power_w':5}
+        reader = probe_module.TemperatureReader()
+        with patch.object(reader, '_query_provider', return_value=values) as query:
+            self.assertEqual(reader._query(), values)
+        query.assert_called_once_with('root\\LibreHardwareMonitor')
+
+    def test_slow_fallback_does_not_refresh_first_provider_timestamp(self):
+        reader = probe_module.TemperatureReader()
+        with patch.object(reader, '_query_provider', side_effect=[{'cpu':65}, {}]), patch.object(
+                probe_module.time, 'monotonic', side_effect=[100, 104, 104]):
+            reader._update()
+        self.assertEqual(reader.value_times['cpu'], 100)
+        reader.next_read = 200
+        with patch.object(probe_module.platform, 'system', return_value='Windows'), patch.object(
+                probe_module.time, 'monotonic', return_value=106):
+            self.assertEqual(reader.read(), {})
+
+    def test_torch_multi_gpu_keeps_identity_on_individual_failures(self):
+        def properties(index):
+            if index == 1:
+                raise RuntimeError('offline')
+            return SimpleNamespace(total_memory=8 * probe_module.GIB)
+
+        def memory(index):
+            if index == 0:
+                raise RuntimeError('offline')
+            return 2 * probe_module.GIB, 8 * probe_module.GIB
+
+        cuda = SimpleNamespace(is_available=lambda: True, device_count=lambda: 3,
+            get_device_properties=properties, get_device_capability=lambda i: (8, 6),
+            get_device_name=lambda i: f'GPU {i}', mem_get_info=memory)
+        probe = probe_module.Probe.__new__(probe_module.Probe)
+        probe.gpu_static = []
+        probe.nvml = None
+        with patch.dict('sys.modules', {'torch': SimpleNamespace(cuda=cuda)}):
+            self.assertTrue(probe._init_gpus_torch())
+            self.assertEqual([g['index'] for g in probe.gpu_static], [0, 2])
+            self.assertEqual(probe.gpu_memory(), [(None, 8), (6, 8)])
+
+    def test_provider_timeout_is_independent_in_both_orders(self):
+        import json
+        result = SimpleNamespace(returncode=0, stdout=json.dumps([
+            {'Parent':'/intelcpu/0', 'Name':'CPU Package', 'Value':65}]))
+        timeout = subprocess.TimeoutExpired('powershell', 3)
+        for results in ([timeout, result], [result, timeout]):
+            with self.subTest(results=results), patch.object(
+                    probe_module.subprocess, 'run', side_effect=results) as run:
+                self.assertEqual(probe_module.TemperatureReader()._query(), {'cpu':65})
+                self.assertEqual(run.call_count, 2)
+                self.assertTrue(all(c.kwargs['timeout'] == 3 for c in run.call_args_list))
+
+    def test_partial_sensor_refresh_does_not_extend_old_measurements(self):
+        reader = probe_module.TemperatureReader()
+        with patch.object(reader, '_query', return_value={'cpu':65, 'ram':40}), patch.object(
+                probe_module.time, 'monotonic', return_value=100):
+            reader._update()
+        with patch.object(reader, '_query', return_value={'cpu':66}), patch.object(
+                probe_module.time, 'monotonic', return_value=104):
+            reader._update()
+        self.assertEqual(reader.values, {'cpu':66, 'ram':40})
+        reader.next_read = 200
+        with patch.object(probe_module.platform, 'system', return_value='Windows'), patch.object(
+                probe_module.time, 'monotonic', return_value=106):
+            self.assertEqual(reader.read(), {'cpu':66})
+        with patch.object(reader, '_query', return_value={}), patch.object(
+                probe_module.time, 'monotonic', return_value=106):
+            reader._update()
+        self.assertEqual(reader.values, {'cpu':66})
+        with patch.object(reader, '_query', return_value={}), patch.object(
+                probe_module.time, 'monotonic', return_value=110):
+            reader._update()
+        self.assertEqual(reader.values, {})
+
     def test_driver_failure_and_missing_middle_card(self):
         p = probe_module.Probe.__new__(probe_module.Probe)
         p.handles = [0]

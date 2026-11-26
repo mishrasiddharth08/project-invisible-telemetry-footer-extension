@@ -131,7 +131,7 @@ def _register_options():
         shared.opts.add_option(
             "pi_telemetry_poll_idle_ms",
             shared.OptionInfo(
-                1,
+                0,
                 "Idle refresh interval, ms (250 minimum; 1 = fastest reliable sampling; 0 = auto)",
                 section=SECTION,
             ),
@@ -139,7 +139,7 @@ def _register_options():
         shared.opts.add_option(
             "pi_telemetry_poll_busy_ms",
             shared.OptionInfo(
-                1,
+                0,
                 "Generate-time refresh interval, ms (250 minimum; 1 = fastest reliable sampling; 0 = auto)",
                 section=SECTION,
             ),
@@ -211,7 +211,9 @@ def _on_app_started(demo, app):
             print(f"{TAG} poller unavailable (library load failed earlier); HUD stays off")
             return
         _poller.start()
-        _routes_module.register(app, _poller)
+        _routes_module.register(app, _poller, shared_server=bool(
+            shared.cmd_opts.listen or shared.cmd_opts.share or
+            getattr(shared.cmd_opts, "webui_is_non_local", False)))
         ram_text = _ram_summary(_poller.probe)
         print(
             f"{TAG} active | GET /pi-telemetry/snapshot"

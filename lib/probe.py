@@ -196,7 +196,8 @@ def ram_hardware_linux():
         elif key in ("Configured Memory Speed", "Configured Clock Speed", "Speed"):
             digits = "".join(char for char in value if char.isdigit())
             if digits:
-                current.setdefault("speed", int(digits))
+                if key != "Speed" or "speed" not in current:
+                    current["speed"] = int(digits)
     if current.get("size"):
         sticks.append(current)
     if not sticks:
@@ -358,6 +359,7 @@ class TemperatureReader:
         self.sampled_at = 0.0
         self.next_read = 0.0
         self.running = False
+        self.value_times = {}
 
     @staticmethod
     def select(rows):
@@ -412,25 +414,47 @@ class TemperatureReader:
                 'ram_power_w': round(sum(ram.values()), 1) if ram else None}
 
     def _query(self):
+        values = {}
+        self._query_times = {}
+        for namespace in ('root\\LibreHardwareMonitor', 'root\\OpenHardwareMonitor'):
+            readings = self._query_provider(namespace)
+            sampled_at = time.monotonic()
+            for key, value in readings.items():
+                if value is not None and key not in values:
+                    values[key] = value
+                    self._query_times[key] = sampled_at
+            if all(key in values for key in ('cpu', 'ram', 'cpu_power_w', 'ram_power_w')):
+                break
+        return values
+
+    def _query_provider(self, namespace):
         command = (
             "$ErrorActionPreference='Stop'; "
-            "foreach ($ns in @('root\\LibreHardwareMonitor','root\\OpenHardwareMonitor')) { "
-            "try { $rows=@(Get-CimInstance -Namespace $ns -ClassName Sensor "
+            f"$rows=@(Get-CimInstance -Namespace '{namespace}' -ClassName Sensor "
             "-Filter \"SensorType = 'Temperature' OR SensorType = 'Power'\" "
             "| Select-Object Name,Parent,Identifier,SensorType,Value); "
             "if ($rows.Count -gt 0) { ConvertTo-Json -InputObject $rows -Compress } "
-            "} catch {} }"
         )
-        result = subprocess.run(
-            ['powershell', '-NoProfile', '-NonInteractive', '-Command', command],
-            capture_output=True, text=True, timeout=3.0,
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-        )
+        try:
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command', command],
+                capture_output=True, text=True, timeout=3.0,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+            )
+        except Exception:
+            return {}
         if result.returncode != 0:
             return {}
         values = {}
         for line in result.stdout.splitlines():
-            rows = json.loads(line)
+            try:
+                rows = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(rows, dict):
+                rows = [rows]
+            if not isinstance(rows, list):
+                continue
             readings = {**self.select(rows), **self.select_power(rows)}
             for key, value in readings.items():
                 if value is not None:
@@ -443,8 +467,16 @@ class TemperatureReader:
         except Exception:
             values = {}
         with self.lock:
-            self.values = values
-            self.sampled_at = time.monotonic()
+            now = time.monotonic()
+            for key, value in values.items():
+                if value is not None:
+                    self.values[key] = value
+                    self.value_times[key] = getattr(self, '_query_times', {}).get(key, now)
+            self.values = {key: value for key, value in self.values.items()
+                           if now - self.value_times.get(key, self.sampled_at) <= 5}
+            self.value_times = {key: self.value_times.get(key, self.sampled_at)
+                                for key in self.values}
+            self.sampled_at = now
             self.next_read = self.sampled_at + (2 if any(v is not None for v in values.values()) else 30)
             self.running = False
 
@@ -460,7 +492,8 @@ class TemperatureReader:
                 except Exception:
                     self.running = False
                     self.next_read = now + 30
-            return dict(self.values) if now - self.sampled_at <= 5 else {}
+            return {key: value for key, value in self.values.items()
+                    if now - self.value_times.get(key, self.sampled_at) <= 5}
 
 
 class Probe:
@@ -611,16 +644,20 @@ class Probe:
 
             if not torch.cuda.is_available():
                 return False
-            properties = torch.cuda.get_device_properties(0)
-            capability = torch.cuda.get_device_capability(0)
-            self.gpu_static.append(
-                {
-                    "index": 0,
-                    "name": str(torch.cuda.get_device_name(0)).strip(),
-                    "total_gb": gb(properties.total_memory),
-                    "cuda_cap": f"{capability[0]}.{capability[1]}",
-                }
-            )
+            for index in range(torch.cuda.device_count()):
+                try:
+                    properties = torch.cuda.get_device_properties(index)
+                    capability = torch.cuda.get_device_capability(index)
+                    self.gpu_static.append({
+                        "index": index,
+                        "name": str(torch.cuda.get_device_name(index)).strip(),
+                        "total_gb": gb(properties.total_memory),
+                        "cuda_cap": f"{capability[0]}.{capability[1]}",
+                    })
+                except Exception:
+                    continue
+            if not self.gpu_static:
+                return False
             self.vram_backend = "torch"
             return True
         except Exception:
@@ -644,8 +681,14 @@ class Probe:
             try:
                 import torch
 
-                free, total = torch.cuda.mem_get_info(0)
-                return [(gb(total) - gb(free), gb(total))]
+                rows = []
+                for gpu in self.gpu_static:
+                    try:
+                        free, total = torch.cuda.mem_get_info(gpu["index"])
+                        rows.append((gb(total - free), gb(total)))
+                    except Exception:
+                        rows.append((None, gpu["total_gb"]))
+                return rows
             except Exception:
                 return []
         if self.vram_backend == "smi":
@@ -676,7 +719,10 @@ class Probe:
         except Exception:
             return None
         try:
-            return float(times.idle), float(sum(times))
+            # Linux includes guest time in user/nice already; iowait is idle.
+            total = float(sum(times)) - float(getattr(times, 'guest', 0)) - float(getattr(times, 'guest_nice', 0))
+            idle = float(times.idle) + float(getattr(times, 'iowait', 0))
+            return idle, total
         except Exception:
             return None
 
